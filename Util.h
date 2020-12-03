@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <stdbool.h>
+
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -12,6 +14,7 @@
 #endif
 
 #define MAX_FRAG_SIZE 1500
+#define POLY 0x8408
 
 struct packet_header {
 	UCHAR message_type;
@@ -24,3 +27,4 @@ int start_winsock(void);
 int init_winsock();
 SOCKET create_socket();
 char* message_type_decode(UCHAR num_value);
+UINT16 get_crc(char* data_pointer, UINT16 length);

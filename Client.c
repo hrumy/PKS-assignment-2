@@ -5,52 +5,53 @@
 #pragma warning(disable : 4996)
 #pragma comment(lib, "Ws2_32.lib")
 
-UINT16 client_initialize_connection(long rc, SOCKET s, SOCKADDR_IN addr, SOCKADDR_IN *remote_addr, int remote_addr_len) {
+UINT16 client_initialize_connection(long rc, SOCKET s, SOCKADDR_IN addr, SOCKADDR_IN* remote_addr, int remote_addr_len) {
 
     struct packet_header *header;
     char init[sizeof(struct packet_header)];
 
     header = (struct packet_header*) init;
-
-    header->message_type = 1;
-    header->crc = 0;
-    header->seq_num = 0;
-    
+  
     UINT16 fragment_size;
-    printf("Select fragment size (0 - %hu): ", MAX_FRAG_SIZE);
-    scanf("%hu", &fragment_size);
+    boolean bad_fragment = true;
+    
+    while (bad_fragment) {
+
+        printf("Select fragment size (0 - %hu): ", MAX_FRAG_SIZE);
+        scanf("%hu", &fragment_size);
+
+        if (fragment_size < MAX_FRAG_SIZE && fragment_size > 0)
+            bad_fragment = false;
+        else
+            printf("Please select a valid fragment size.\n");
+    }
     header->fragment_size = fragment_size;
+    header->message_type = 1;
+    header->seq_num = 0;
+    header->crc = 0;
+    header->crc = get_crc(init, (UINT16*)sizeof(struct packet_header));
 
-    /*char msg[10];
-    strcpy(msg, "pls");
-
-    for (int i = 0; i < 10; i++)
-        init[sizeof(struct packet_header) + i] = msg[i];
-      */
     rc = sendto(s, init, sizeof(struct packet_header), 0, (SOCKADDR*)&addr, remote_addr_len);
     if (rc == SOCKET_ERROR) {
-        printf("Error: sendto, error code: %d \n", WSAGetLastError());
+        printf("[-] Error: sendto, error code: %d \n", WSAGetLastError());
         return 1;
     }
     else {
-        printf("Initialization packet sent, %d bytes! \nWaiting for response", rc);
-        //for (int i = 0; i < 10; i++) {
-        //    Sleep(800);
-        //    putchar('.');
-        //}
-
-        char ack[sizeof(struct packet_header)];
-
-        rc = recvfrom(s, ack, sizeof(struct packet_header), 0, (SOCKADDR*)&remote_addr, &remote_addr_len);
-        if (rc == SOCKET_ERROR)
-        {
-            printf("Error: recvfrom, error code: %d \n", WSAGetLastError());
-            return 1;
+        printf("[+] Initialization packet sent! [%dB] \n Waiting for response", rc);
+        for (int i = 0; i < 3; i++) {
+            Sleep(1000);
+            putchar('.');
         }
-        else
-        {
-            printf("\nAcknowledment of initialization recieved! [%s]\n", message_type_decode(header->message_type));
-        }
+    }
+
+    rc = recvfrom(s, init, sizeof(struct packet_header), 0, (SOCKADDR*)remote_addr, &remote_addr_len);
+    if (rc == SOCKET_ERROR) {
+        printf("\n[-] Error: recvfrom, error code: %d \n", WSAGetLastError());
+        return 1;
+    }
+    else
+    {
+        printf("\n[+] Acknowledment of initialization recieved! Recieved [%s][%dB]\n", message_type_decode(header->message_type), rc);
     }
 
 
@@ -79,6 +80,8 @@ int client_start () {
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = inet_addr(ip);
 
+    //rc = connect(s, (SOCKADDR*)&addr, sizeof(SOCKADDR_IN));
+
     client_initialize_connection(rc, s, addr, &remote_addr, remote_addr_len);
 
     while (1)
@@ -86,13 +89,26 @@ int client_start () {
         printf("Enter text:");
         scanf("%s", buf);
 
-        rc = sendto(s, buf, strlen(buf), 0, (SOCKADDR*)&addr, sizeof(SOCKADDR_IN));
+        rc = sendto(s, buf, strlen(buf), 0, (SOCKADDR*)&addr, remote_addr_len);      
         if (rc == SOCKET_ERROR){
             printf("Error: sendto, error code: %d \n", WSAGetLastError());
             return 1;
         }
         else {
             printf("%d bytes sent! \n", rc);
+        }
+
+        rc = recvfrom(s, buf, 256, 0, (SOCKADDR*)&remote_addr, &remote_addr_len);
+        if (rc == SOCKET_ERROR)
+        {
+            printf("Fehler: recvfrom, fehler code: %d\n", WSAGetLastError());
+            return 1;
+        }
+        else
+        {
+            printf("%d bytes recieved!\n", rc);
+            buf[rc] = '\0';
+            printf("Recieved data: %s\n", buf);
         }
     }
 }
