@@ -5,7 +5,7 @@
 #pragma warning(disable : 4996)
 #pragma comment(lib, "Ws2_32.lib")
 
-UINT16 client_initialize_connection(long rc, SOCKET s, SOCKADDR_IN addr, SOCKADDR_IN* remote_addr, int remote_addr_len) {
+UINT16 client_initialize_connection(long rc, SOCKET s, SOCKADDR_IN addr, SOCKADDR_IN* remote_addr, int remote_addr_len, UINT16 msg_size) {
 
     struct packet_header *header;
     char init[sizeof(struct packet_header)];
@@ -27,14 +27,14 @@ UINT16 client_initialize_connection(long rc, SOCKET s, SOCKADDR_IN addr, SOCKADD
     }
     header->fragment_size = fragment_size;
     header->message_type = 1;
-    header->seq_num = 0;
+    header->seq_num = msg_size;
     header->crc = 0;
     header->crc = get_crc(init, (UINT16*)sizeof(struct packet_header));
 
     rc = sendto(s, init, sizeof(struct packet_header), 0, (SOCKADDR*)&addr, remote_addr_len);
     if (rc == SOCKET_ERROR) {
         printf("[-] Error: sendto, error code: %d \n", WSAGetLastError());
-        return 1;
+        return 0;
     }
     else {
         printf("[+] Initialization packet sent! [%dB] \n Waiting for response", rc);
@@ -47,7 +47,7 @@ UINT16 client_initialize_connection(long rc, SOCKET s, SOCKADDR_IN addr, SOCKADD
     rc = recvfrom(s, init, sizeof(struct packet_header), 0, (SOCKADDR*)remote_addr, &remote_addr_len);
     if (rc == SOCKET_ERROR) {
         printf("\n[-] Error: recvfrom, error code: %d \n", WSAGetLastError());
-        return 1;
+        return 0;
     }
     else
     {
@@ -60,55 +60,123 @@ UINT16 client_initialize_connection(long rc, SOCKET s, SOCKADDR_IN addr, SOCKADD
 
 int client_start () {
 
+    system("cls");
+    printf("============================ Client =============================\n");
+
+    // Socket creation
     long rc = init_winsock();
     SOCKET s = create_socket();
+    if (rc == -1 || s == -1)
+        return -1;
 
-    char buf[256];
+    // Connection 
     SOCKADDR_IN addr;
     SOCKADDR_IN remote_addr;
     int remote_addr_len = sizeof(SOCKADDR_IN);
     char ip[20];
     short port;
-    struct packet_header *header;
 
+    // Data header
+    struct packet_header *header;
+    
+
+    // Retrieving IP and port
     printf("Select recievers IP: ");
     scanf("%s", &ip);
     printf("Select recievers port: ");
     scanf("%hu", &port);
 
+    // Setting IP and port
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = inet_addr(ip);
 
-    //rc = connect(s, (SOCKADDR*)&addr, sizeof(SOCKADDR_IN));
-
-    client_initialize_connection(rc, s, addr, &remote_addr, remote_addr_len);
-
+    char *data;
+   
     while (1)
-    {       
-        printf("Enter text:");
-        scanf("%s", buf);
+    {   
+        unsigned int option;
+        scanf("%d", &option);
 
-        rc = sendto(s, buf, strlen(buf), 0, (SOCKADDR*)&addr, remote_addr_len);      
-        if (rc == SOCKET_ERROR){
-            printf("Error: sendto, error code: %d \n", WSAGetLastError());
-            return 1;
-        }
-        else {
-            printf("%d bytes sent! \n", rc);
-        }
+        if (option == 1) {
 
-        rc = recvfrom(s, buf, 256, 0, (SOCKADDR*)&remote_addr, &remote_addr_len);
-        if (rc == SOCKET_ERROR)
-        {
-            printf("Fehler: recvfrom, fehler code: %d\n", WSAGetLastError());
-            return 1;
-        }
-        else
-        {
-            printf("%d bytes recieved!\n", rc);
-            buf[rc] = '\0';
-            printf("Recieved data: %s\n", buf);
+            char *msg = (char*)calloc(MAX_TEXT_SIZE, sizeof(char));
+            printf("Enter text:");
+            gets();
+            fgets(msg, MAX_TEXT_SIZE, stdin);
+            
+            UINT16 msg_size = strlen(msg);
+            printf("[%d]", msg_size);
+
+            // Initializing connection and setting fragment size
+            UINT16 fragment_size = client_initialize_connection(rc, s, addr, &remote_addr, remote_addr_len, msg_size);
+            if (fragment_size == 0) {
+                return -1;
+            }
+
+            // Fragmentation
+            unsigned int num_of_fragments;
+            if (strlen(msg) > fragment_size) {
+                num_of_fragments = msg_size / fragment_size + 1;
+            }
+            else
+                num_of_fragments = 1;
+
+            data = (char*)malloc((sizeof(struct packet_header) + fragment_size) + 1 * sizeof(char));
+            
+            header = (struct packet_header*)data;
+            header->message_type = 3;
+            header->fragment_size = fragment_size;
+            header->seq_num = 0;
+            header->crc = 0;
+
+            
+
+            int index = 0;
+            boolean stop = false;
+            for (int i = 0; i < num_of_fragments; i++) {
+
+                header = (struct packet_header*)data;
+
+                for (int j = 0; j < fragment_size; j++) {
+                    /*if (data[sizeof(struct packet_header) + j] == 0) {
+                        stop = true;
+                        break;
+                    }*/
+                   
+                    data[sizeof(struct packet_header) + j] = msg[index++];
+               
+                }
+
+                if (stop)
+                    break;
+
+                rc = sendto(s, data, sizeof(struct packet_header) + fragment_size, 0, (SOCKADDR*)&addr, remote_addr_len);
+                if (rc == SOCKET_ERROR) {
+                    printf("Error: sendto, error code: %d \n", WSAGetLastError());
+                    return 1;
+                }
+                else {
+                    printf(" %d bytes sent! \n", rc);
+              
+                }
+            }
+
+            header = NULL;
+            
+            /*
+            rc = recvfrom(s, buf, 256, 0, (SOCKADDR*)&remote_addr, &remote_addr_len);
+            if (rc == SOCKET_ERROR)
+            {
+                printf("Fehler: recvfrom, fehler code: %d\n", WSAGetLastError());
+                return 1;
+            }
+            else
+            {
+                printf("%d bytes recieved!\n", rc);
+                buf[rc] = '\0';
+                printf("Recieved data: %s\n", buf);
+            }*/
         }
     }
 }

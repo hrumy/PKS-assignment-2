@@ -8,13 +8,15 @@
 
 int main()
 {
-   
+    printf("========================== Choose mode ==========================\n");
+    printf("Please choose mode to continue (1 - client, 2 - server):");
 
     int option;
     scanf("%d", &option);
 
     if (option == 1) 
         client_start();
+    
     
 
     if (option == 2)

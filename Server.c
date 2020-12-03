@@ -5,7 +5,7 @@
 #pragma warning(disable : 4996)
 #pragma comment(lib, "Ws2_32.lib")
 
-int server_initialize_connection(long rc, SOCKET s, SOCKADDR_IN *remote_addr, int remote_addr_len) {
+UINT16 server_initialize_connection(long rc, SOCKET s, SOCKADDR_IN *remote_addr, int remote_addr_len, UINT32* msg_type) {
 
     struct packet_header* header;
     char init[sizeof(struct packet_header)];
@@ -13,7 +13,7 @@ int server_initialize_connection(long rc, SOCKET s, SOCKADDR_IN *remote_addr, in
     rc = recvfrom(s, init, sizeof(struct packet_header), 0, (SOCKADDR*)remote_addr, &remote_addr_len);
     if (rc == SOCKET_ERROR) {
         printf("[-] Error: recvfrom, error code: %d \n", WSAGetLastError());
-        return 1;
+        return 0;
     }
     else {
         header = (struct packet_header*)init;
@@ -23,16 +23,17 @@ int server_initialize_connection(long rc, SOCKET s, SOCKADDR_IN *remote_addr, in
     UINT16 crc = header->crc;
     header->crc = 0;
 
-    if (crc != get_crc(init, (UINT16*)sizeof(struct packet_header))) {
-        header->message_type = 0;      
-    }
-    else {
+    if (crc != get_crc(init, (UINT16*)sizeof(struct packet_header))) 
+        header->message_type = 0;         
+    else 
         header->message_type = 2;
-    }
-        
+    
+    *msg_type = header->seq_num;
+
     rc = sendto(s, init, sizeof(struct packet_header), 0, (SOCKADDR*)remote_addr, remote_addr_len);
     if (rc == SOCKET_ERROR) {
         printf("[-] Error: sendto, error code: %d \n", WSAGetLastError());
+        return 0;
     }
     else {
         printf("[+] Acknowledgment of initialization sent! [%dB]\n", rc);
@@ -42,49 +43,91 @@ int server_initialize_connection(long rc, SOCKET s, SOCKADDR_IN *remote_addr, in
 }
 int server_start () {
 
+    system("cls");
+    printf("============================ Server =============================\n");
+
+    // Socket creation
     long rc = init_winsock();
     SOCKET s = create_socket();
+    if (rc == -1 || s == -1)
+        return -1;
+
+    // Conection
     SOCKADDR_IN addr;
     SOCKADDR_IN remote_addr;
     int remote_addr_len = sizeof(SOCKADDR_IN);
-    char buf[256];
+    
+    char buf[10000];
     char buf2[300];
 
+    // TODO Data header
+
+    // Retrieving port
     short port;
     printf("Select port to sniff on: ");
     scanf("%hu", &port);
 
+    // Setting port
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = ADDR_ANY;
 
+    // Binding to target pc
     rc = bind(s, (SOCKADDR*)&addr, sizeof(SOCKADDR_IN));
     if (rc == SOCKET_ERROR) {
         printf("[-] Error: bind, error code: %d \n", WSAGetLastError());
-        return 1;
+        return -1;
     }
     else {
         printf("Socket bound to port %d \n", port);
     }
 
-    int fragment_size = server_initialize_connection(rc, s, &remote_addr, remote_addr_len);
+    char *data;
 
     while (1) {
 
-        rc = recvfrom(s, buf, 256, 0, (SOCKADDR*)&remote_addr, &remote_addr_len);
+        // Initializing connection and retrieving max fragment size
+        struct packet_header* header;
 
-        if (rc == SOCKET_ERROR)
-        {
-            printf("[-] Error: recvfrom, error code: %d \n", WSAGetLastError());
-            return 1;
-        }
-        else
-        {
-            printf("%d bytes received! \n", rc);
-            buf[rc] = '\0';
-        }
-        printf("Received data: %s \n", buf);
+        UINT32 msg_size = 0;
+        UINT16 fragment_size = server_initialize_connection(rc, s, &remote_addr, remote_addr_len, &msg_size);
+        
+        if (fragment_size == 0)
+            return -1;
 
+        data = (char*)malloc((sizeof(struct packet_header) + fragment_size) * sizeof(char));      
+        header = (struct packet_header*)data;
+
+        // Fragmentation
+        UINT32 num_of_fragments = msg_size / fragment_size + 1;
+        char* msg = (char*)calloc(fragment_size, sizeof(char));
+        int index = 0;
+    
+        for (int i = 0; i < num_of_fragments; i++) {
+
+            rc = recvfrom(s, data, sizeof(struct packet_header) + fragment_size, 0, (SOCKADDR*)&remote_addr, &remote_addr_len);
+            if (rc == SOCKET_ERROR)
+            {
+                printf("[-] Error: recvfrom, error code: %d \n", WSAGetLastError());
+                return 1;
+            }
+            else
+            {
+                printf("%d bytes received! \n", rc);
+                header = (struct packet_header*)data;
+                //buf[rc] = '\0';
+            }
+           
+            for (int i = 0; i < fragment_size; i++) {
+                msg[index++] = data[sizeof(struct packet_header) + i];
+                
+            }
+        }
+
+        printf("Recieved message: %s", msg);
+      
+        header = NULL;
+        /*
         sprintf(buf2, "You me too %s", buf);
         rc = sendto(s, buf2, strlen(buf2), 0, (SOCKADDR*)&remote_addr, remote_addr_len);
         if (rc == SOCKET_ERROR)
@@ -93,7 +136,7 @@ int server_start () {
         }
         else {
             printf("%d bytes sent! \n", rc);
-        }
+        }*/
 
     }
 }

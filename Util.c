@@ -17,10 +17,8 @@ long init_winsock() {
 
     if (rc != 0) {
         printf("Error: startWinsock, error code: %d \n", rc);
-        return 1;
+        return -1;
     }
-    else 
-        printf("Winsock started! \n");
     
     return rc;
 }
@@ -31,10 +29,8 @@ SOCKET create_socket() {
 
     if (s == INVALID_SOCKET) {
         printf("Error: The socket could not be created, error code: %d \n", WSAGetLastError());
-        return 1;
+        return -1;
     }
-    else
-        printf("UDP socket created! \n");
    
     return s;
 }
