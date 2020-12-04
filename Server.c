@@ -97,15 +97,23 @@ int server_start () {
 
         data = (char*)malloc((sizeof(struct packet_header) + fragment_size) * sizeof(char));      
         header = (struct packet_header*)data;
+        header->fragment_size = fragment_size;
 
         // Fragmentation
-        UINT32 num_of_fragments = msg_size / fragment_size + 1;
+        unsigned int num_of_fragments;
+        if (msg_size > fragment_size) {
+            num_of_fragments = msg_size / fragment_size + 1;
+        }
+        else
+            num_of_fragments = 1;
+
+
+
         char* msg = (char*)calloc(fragment_size, sizeof(char));
-        int index = 0;
-    
+        int index = 0;  
         for (int i = 0; i < num_of_fragments; i++) {
 
-            rc = recvfrom(s, data, sizeof(struct packet_header) + fragment_size, 0, (SOCKADDR*)&remote_addr, &remote_addr_len);
+            rc = recvfrom(s, data, sizeof(struct packet_header) + header->fragment_size, 0, (SOCKADDR*)&remote_addr, &remote_addr_len);
             if (rc == SOCKET_ERROR)
             {
                 printf("[-] Error: recvfrom, error code: %d \n", WSAGetLastError());
@@ -114,17 +122,19 @@ int server_start () {
             else
             {
                 printf("%d bytes received! \n", rc);
+                data = (char*)realloc(data, (sizeof(struct packet_header) + header->fragment_size) * sizeof(char));
                 header = (struct packet_header*)data;
-                //buf[rc] = '\0';
+                
             }
            
-            for (int i = 0; i < fragment_size; i++) {
+            for (int i = 0; i < header->fragment_size; i++) {
                 msg[index++] = data[sizeof(struct packet_header) + i];
-                
+                msg[index] = '\0';
             }
         }
 
-        printf("Recieved message: %s", msg);
+        if (header->message_type == 3)
+            printf("[+] Recieved message: %s\n", msg);
       
         header = NULL;
         /*

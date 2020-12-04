@@ -98,71 +98,69 @@ int client_start () {
         unsigned int option;
         scanf("%d", &option);
 
-        if (option == 1) {
+        
 
-            char *msg = (char*)calloc(MAX_TEXT_SIZE, sizeof(char));
-            printf("Enter text:");
-            gets();
-            fgets(msg, MAX_TEXT_SIZE, stdin);
+        char *msg = (char*)calloc(MAX_TEXT_SIZE, sizeof(char));
+        printf("Enter text:");
+        gets();
+        fgets(msg, MAX_TEXT_SIZE, stdin);
             
-            UINT16 msg_size = strlen(msg);
-            printf("[%d]", msg_size);
+        UINT16 msg_size = strlen(msg) - 2;
 
-            // Initializing connection and setting fragment size
-            UINT16 fragment_size = client_initialize_connection(rc, s, addr, &remote_addr, remote_addr_len, msg_size);
-            if (fragment_size == 0) {
-                return -1;
-            }
 
-            // Fragmentation
-            unsigned int num_of_fragments;
-            if (strlen(msg) > fragment_size) {
-                num_of_fragments = msg_size / fragment_size + 1;
-            }
-            else
-                num_of_fragments = 1;
+        // Initializing connection and setting fragment size
+        UINT16 fragment_size = client_initialize_connection(rc, s, addr, &remote_addr, remote_addr_len, msg_size);
+        if (fragment_size == 0) {
+            return -1;
+        }
 
-            data = (char*)malloc((sizeof(struct packet_header) + fragment_size) + 1 * sizeof(char));
+        // Fragmentation
+        unsigned int num_of_fragments;
+        if (msg_size > fragment_size) {
+            num_of_fragments = msg_size / fragment_size + 1;
+        }
+        else
+            num_of_fragments = 1;
+
+        data = (char*)malloc((sizeof(struct packet_header) + fragment_size) + 1 * sizeof(char));
             
+        header = (struct packet_header*)data;
+        header->message_type = 3;
+        header->fragment_size = fragment_size;
+        header->seq_num = 0;
+        header->crc = 0;
+
+            
+
+        int index = 0;
+
+        for (int i = 0; i < num_of_fragments; i++) {
+
             header = (struct packet_header*)data;
-            header->message_type = 3;
-            header->fragment_size = fragment_size;
-            header->seq_num = 0;
-            header->crc = 0;
 
-            
-
-            int index = 0;
-            boolean stop = false;
-            for (int i = 0; i < num_of_fragments; i++) {
-
-                header = (struct packet_header*)data;
-
-                for (int j = 0; j < fragment_size; j++) {
-                    /*if (data[sizeof(struct packet_header) + j] == 0) {
-                        stop = true;
-                        break;
-                    }*/
-                   
-                    data[sizeof(struct packet_header) + j] = msg[index++];
-               
-                }
-
-                if (stop)
+            for (int j = 0; j < fragment_size; j++) {
+                if (index == msg_size + 1) {
+ 
+                    header->fragment_size = j;
                     break;
-
-                rc = sendto(s, data, sizeof(struct packet_header) + fragment_size, 0, (SOCKADDR*)&addr, remote_addr_len);
-                if (rc == SOCKET_ERROR) {
-                    printf("Error: sendto, error code: %d \n", WSAGetLastError());
-                    return 1;
                 }
-                else {
-                    printf(" %d bytes sent! \n", rc);
-              
-                }
+                   
+                data[sizeof(struct packet_header) + j] = msg[index++];
+               
             }
 
-            header = NULL;
+            rc = sendto(s, data, sizeof(struct packet_header) + header->fragment_size, 0, (SOCKADDR*)&addr, remote_addr_len);
+            if (rc == SOCKET_ERROR) {
+                printf("Error: sendto, error code: %d \n", WSAGetLastError());
+                return 1;
+            }
+            else {
+                printf(" [SEQ_NUM %d][%dB]\n", header->seq_num, rc);
+              
+            }
+        }
+
+        header = NULL;
             
             /*
             rc = recvfrom(s, buf, 256, 0, (SOCKADDR*)&remote_addr, &remote_addr_len);
@@ -177,6 +175,6 @@ int client_start () {
                 buf[rc] = '\0';
                 printf("Recieved data: %s\n", buf);
             }*/
-        }
+        
     }
 }
