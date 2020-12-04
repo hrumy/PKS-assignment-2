@@ -110,26 +110,56 @@ int server_start () {
 
 
         char* msg = (char*)calloc(fragment_size, sizeof(char));
-        int index = 0;  
+        int index = 0, error = 0;
         for (int i = 0; i < num_of_fragments; i++) {
 
+            // Recieving packet 
             rc = recvfrom(s, data, sizeof(struct packet_header) + header->fragment_size, 0, (SOCKADDR*)&remote_addr, &remote_addr_len);
             if (rc == SOCKET_ERROR)
             {
                 printf("[-] Error: recvfrom, error code: %d \n", WSAGetLastError());
                 return 1;
             }
-            else
-            {
-                printf("%d bytes received! \n", rc);
-                data = (char*)realloc(data, (sizeof(struct packet_header) + header->fragment_size) * sizeof(char));
-                header = (struct packet_header*)data;
-                
+                       
+            data = (char*)realloc(data, (sizeof(struct packet_header) + header->fragment_size) * sizeof(char));
+            header = (struct packet_header*)data;
+
+            printf("[+] Recieved: [MSG_TYPE %s] [SEQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
+
+            int crc = header->crc;
+            header->crc = 0;
+
+            if (crc != get_crc(data, (sizeof(struct packet_header) + header->fragment_size))) {
+
+                printf("[-] Error: bad packet.\n");
+
+                // Send again
+                header->message_type = 0;
+                i--;
+
+                // If packet was resend 5 times, connection will end
+                if (error++ == 5) {
+                    printf("[-] Fatal error: connection not safe.\n");
+                    return 1;
+                }
             }
-           
-            for (int i = 0; i < header->fragment_size; i++) {
-                msg[index++] = data[sizeof(struct packet_header) + i];
-                msg[index] = '\0';
+            else {
+                header->seq_num = i;
+            }
+
+            rc = sendto(s, data, (sizeof(struct packet_header) + header->fragment_size), 0, (SOCKADDR*)&remote_addr, remote_addr_len);
+            if (rc == SOCKET_ERROR) {
+                printf("Error: sendto, error code: %d \n", WSAGetLastError());
+                return 1;
+            }
+            printf("[+] Sent: [MSG_TYPE %s] [SEQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
+
+            
+            if (header->message_type != 0) {
+                for (int i = 0; i < header->fragment_size; i++) {
+                    msg[index++] = data[sizeof(struct packet_header) + i];
+                    msg[index] = '\0';
+                }
             }
         }
 

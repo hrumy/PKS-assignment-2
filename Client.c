@@ -94,18 +94,21 @@ int client_start () {
     char *data;
    
     while (1)
-    {   
-        unsigned int option;
-        scanf("%d", &option);
-
-        
+    {      
 
         char *msg = (char*)calloc(MAX_TEXT_SIZE, sizeof(char));
         printf("Enter text:");
         gets();
         fgets(msg, MAX_TEXT_SIZE, stdin);
-            
-        UINT16 msg_size = strlen(msg) - 2;
+        
+        // Retrieving message size and message type
+        UINT16 msg_size;
+        UCHAR msg_type;
+
+        if (msg[0] != "/") {
+            msg_size = strlen(msg) - 2;
+            msg_type = 3;
+        }
 
 
         // Initializing connection and setting fragment size
@@ -122,25 +125,24 @@ int client_start () {
         else
             num_of_fragments = 1;
 
-        data = (char*)malloc((sizeof(struct packet_header) + fragment_size) + 1 * sizeof(char));
-            
+
+        // Set header
+        data = (char*)malloc((sizeof(struct packet_header) + fragment_size) + 1 * sizeof(char));           
         header = (struct packet_header*)data;
-        header->message_type = 3;
+        header->message_type = msg_type;
         header->fragment_size = fragment_size;
-        header->seq_num = 0;
-        header->crc = 0;
+        
 
-            
-
-        int index = 0;
-
+        
+        // Start sending
+        int index = 0;       
         for (int i = 0; i < num_of_fragments; i++) {
 
-            header = (struct packet_header*)data;
-
+            header->seq_num = i;
+           
             for (int j = 0; j < fragment_size; j++) {
+
                 if (index == msg_size + 1) {
- 
                     header->fragment_size = j;
                     break;
                 }
@@ -149,15 +151,34 @@ int client_start () {
                
             }
 
-            rc = sendto(s, data, sizeof(struct packet_header) + header->fragment_size, 0, (SOCKADDR*)&addr, remote_addr_len);
-            if (rc == SOCKET_ERROR) {
-                printf("Error: sendto, error code: %d \n", WSAGetLastError());
-                return 1;
-            }
-            else {
-                printf(" [SEQ_NUM %d][%dB]\n", header->seq_num, rc);
-              
-            }
+            do {
+
+                header->message_type = msg_type;
+                header->crc = 0;
+                header->crc = get_crc(data, sizeof(struct packet_header) + header->fragment_size) + 1;
+
+                rc = sendto(s, data, sizeof(struct packet_header) + header->fragment_size, 0, (SOCKADDR*)&addr, remote_addr_len);
+                if (rc == SOCKET_ERROR) {
+                    printf("Error: sendto, error code: %d \n", WSAGetLastError());
+                    return 1;
+                }           
+                printf("[+] Sent: [MSG_TYPE %s] [SEQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
+
+                rc = recvfrom(s, data, sizeof(struct packet_header) + header->fragment_size, 0, (SOCKADDR*)&remote_addr, &remote_addr_len);
+                if (rc == SOCKET_ERROR)
+                {
+                    printf("Error: recvfrom, error code: %d \n", WSAGetLastError());
+                    return 1;
+                }
+
+                header = (struct packet_header*)data;
+                printf("[+] Recieved: [MSG_TYPE %s] [ARQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
+
+            } while (header->message_type == 0);
+
+            
+           
+            
         }
 
         header = NULL;
