@@ -139,7 +139,7 @@ int server_start () {
 
                 // If packet was resend 5 times, connection will end
                 if (error++ == 5) {
-                    printf("[-] Fatal error: connection not safe.\n");
+                    printf("[-] Fatal error: disconnecting, connection not safe.\n");
                     return 1;
                 }
             }
@@ -152,7 +152,7 @@ int server_start () {
                 printf("Error: sendto, error code: %d \n", WSAGetLastError());
                 return 1;
             }
-            printf("[+] Sent: [MSG_TYPE %s] [SEQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
+            printf("[+] Sent: [MSG_TYPE %s] [ARQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
 
             
             if (header->message_type != 0) {

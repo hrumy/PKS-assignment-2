@@ -6,13 +6,6 @@
 #include <time.h>
 #include <stdbool.h>
 
-
-#ifdef _WIN32
-#include <Windows.h>
-#else
-#include <unistd.h>
-#endif
-
 #define MAX_FRAG_SIZE 1500
 #define POLY 0x8408
 #define MAX_TEXT_SIZE 2000

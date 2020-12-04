@@ -105,10 +105,21 @@ int client_start () {
         UINT16 msg_size;
         UCHAR msg_type;
 
-        if (msg[0] != "/") {
+        if (msg[0] != '/') {
             msg_size = strlen(msg) - 2;
             msg_type = 3;
         }
+
+        boolean error = false;
+        if (msg[0] == '/' && msg[1] == 'e') {
+            msg_size = strlen(msg) - 5;
+            error = true;
+            msg += 3;
+            msg_type = 3;
+        }
+
+
+
 
 
         // Initializing connection and setting fragment size
@@ -146,17 +157,25 @@ int client_start () {
                     header->fragment_size = j;
                     break;
                 }
-                   
+
                 data[sizeof(struct packet_header) + j] = msg[index++];
-               
             }
+            
 
             do {
 
+                // Set header
                 header->message_type = msg_type;
                 header->crc = 0;
-                header->crc = get_crc(data, sizeof(struct packet_header) + header->fragment_size) + 1;
 
+                if (error) {
+                    header->crc = get_crc(data, sizeof(struct packet_header) + header->fragment_size) + 1;
+                    error = false;
+                }
+                else
+                    header->crc = get_crc(data, sizeof(struct packet_header) + header->fragment_size);
+
+                // Send packet
                 rc = sendto(s, data, sizeof(struct packet_header) + header->fragment_size, 0, (SOCKADDR*)&addr, remote_addr_len);
                 if (rc == SOCKET_ERROR) {
                     printf("Error: sendto, error code: %d \n", WSAGetLastError());
@@ -164,6 +183,8 @@ int client_start () {
                 }           
                 printf("[+] Sent: [MSG_TYPE %s] [SEQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
 
+                // Recieve ack
+                // TODO timeout
                 rc = recvfrom(s, data, sizeof(struct packet_header) + header->fragment_size, 0, (SOCKADDR*)&remote_addr, &remote_addr_len);
                 if (rc == SOCKET_ERROR)
                 {
@@ -171,6 +192,7 @@ int client_start () {
                     return 1;
                 }
 
+                // Retrieve data from server
                 header = (struct packet_header*)data;
                 printf("[+] Recieved: [MSG_TYPE %s] [ARQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
 
