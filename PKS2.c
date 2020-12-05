@@ -8,20 +8,35 @@
 
 int main()
 {
-    printf("========================== Choose mode ==========================\n");
-    printf("Please choose mode to continue (1 - client, 2 - server):");
 
-    int option;
-    scanf("%d", &option);
+    while (1) {
 
-    if (option == 1) 
-        client_start();
-    
-    
+        system("cls");
+        printf("============================= Menu ==============================\n\n");
+        printf("Please select an option to continue:\n\n 1 - Client\n 2 - Server\n 3 - End\n\nEnter your option:  ");
 
-    if (option == 2)
-        server_start();
+        int option;
+        scanf("%d", &option);
+
+        if (option == 1)
+            if (client_start() == 1) {
+                printf("[-] Disconnected\nPress any key to continue...");
+                getch();
+            }
+
+
+
+        if (option == 2)
+            if (server_start() == 1) {
+                printf("[-] Disconnected\nPress any key to continue...");
+                getch();
+            }
+            
+
+        if (option == 3)
+            return 0;
              
     
+    }
     return 0;
 }

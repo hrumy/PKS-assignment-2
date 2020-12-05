@@ -36,7 +36,7 @@ UINT16 server_initialize_connection(long rc, SOCKET s, SOCKADDR_IN *remote_addr,
         return 0;
     }
     else {
-        printf("[+] Acknowledgment of initialization sent! [%dB]\n", rc);
+        printf("[+] Acknowledgment of initialization sent! [%dB]\n\n", rc);
     }
 
     //free(init);
@@ -51,7 +51,7 @@ int server_start () {
     long rc = init_winsock();
     SOCKET s = create_socket();
     if (rc == -1 || s == -1)
-        return -1;
+        return 1;
 
     // Conection
     SOCKADDR_IN addr;
@@ -76,16 +76,27 @@ int server_start () {
     // Binding to target pc
     rc = bind(s, (SOCKADDR*)&addr, sizeof(SOCKADDR_IN));
     if (rc == SOCKET_ERROR) {
-        printf("[-] Error: bind, error code: %d \n", WSAGetLastError());
-        return -1;
+        printf("[-] Error: bind, error code: %d \n[-] Please select different port.\n", WSAGetLastError());
+        return 1;
     }
-    else {
-        printf("Socket bound to port %d \n", port);
-    }
+    
 
     char *data;
 
     while (1) {
+
+        system("cls");
+        printf("======================= Server on port %d =======================\n", port);
+
+        int option;
+        printf("Commands:\n 1 - start sniffing\n 2 - back to menu\n\nEnter your option: ");
+        scanf("%d", &option);
+
+        if (option == 2)
+            return 2;
+
+        system("cls");
+        printf("======================= Server on port %d =======================\n Sniffing..\n", port);
 
         // Initializing connection and retrieving max fragment size
         struct packet_header* header;
@@ -93,7 +104,7 @@ int server_start () {
         UINT32 msg_size = 0;
         UINT16 fragment_size = server_initialize_connection(rc, s, &remote_addr, remote_addr_len, &msg_size);
         if (fragment_size == 0)
-            return -1;
+            return 1;
 
 
         data = (char*)malloc((sizeof(struct packet_header) + fragment_size) * sizeof(char));      
@@ -173,7 +184,7 @@ int server_start () {
                 printf("Error: sendto, error code: %d \n", WSAGetLastError());
                 return 1;
             }
-            printf("[+] Sent: [MSG_TYPE %s] [ARQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
+            printf("[+] Sent:     [MSG_TYPE %s] [ARQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
 
             
             
@@ -181,7 +192,7 @@ int server_start () {
 
         // Message transfer
         if (header->message_type == 3)
-            printf("[+] Recieved message: %s\n", msg);
+            printf("\n[+] Recieved message: %s\n\n", msg);
 
         // File transfer
         if (header->message_type == 4) {
@@ -213,15 +224,17 @@ int server_start () {
                 fprintf(f, "%c", msg[i]);
 
             fclose(f);
-            printf("[+] Recieved file: %s\n", full_path);
+            printf("\n[+] Recieved file: %s\n\n", full_path);
             //free(full_path);
         }
         
         t = clock() - t;
         double time_taken = ((double)t) / CLOCKS_PER_SEC;
         double time_per_fragment = time_taken / num_of_fragments;
-        printf("[+] Recieving took %lfs (%lfs per fragment)\n", time_taken, time_per_fragment);
+        printf("[+] Recieving took %lfs (%lfs per fragment)\n\n", time_taken, time_per_fragment);
 
+        printf("Press any key to continue...");
+        getch();
         //free(data);
         header = NULL;
        

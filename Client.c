@@ -17,13 +17,13 @@ UINT16 client_initialize_connection(long rc, SOCKET s, SOCKADDR_IN addr, SOCKADD
     
     while (bad_fragment) {
 
-        printf("Select fragment size (0 - %hu): ", MAX_FRAG_SIZE);
+        printf("  Select fragment size (0 - %hu): ", MAX_FRAG_SIZE);
         scanf("%hu", &fragment_size);
 
         if (fragment_size < MAX_FRAG_SIZE && fragment_size > 0)
             bad_fragment = false;
         else
-            printf("Please select a valid fragment size.\n");
+            printf("[-] Please select a valid fragment size.\n");
     }
     header->fragment_size = fragment_size;
     header->message_type = 1;
@@ -37,7 +37,7 @@ UINT16 client_initialize_connection(long rc, SOCKET s, SOCKADDR_IN addr, SOCKADD
         return 0;
     }
     else {
-        printf("[+] Initialization packet sent! [%dB] \n", rc);
+        printf("\n[+] Initialization packet sent! [%dB] \n", rc);
     }
 
     rc = recvfrom(s, init, sizeof(struct packet_header), 0, (SOCKADDR*)remote_addr, &remote_addr_len);
@@ -68,7 +68,7 @@ int client_start () {
     long rc = init_winsock();
     SOCKET s = create_socket();
     if (rc == -1 || s == -1)
-        return -1;
+        return 1;
 
     // Connection 
     SOCKADDR_IN addr;
@@ -97,8 +97,18 @@ int client_start () {
     while (1)
     {      
 
+        system("cls");
+        printf("============================ Client =============================\n");
+        printf("Target IP: %s\nTarget port: %d\n\n", ip, port);
+        printf("Commands:\n");
+        printf(" /e [text] - simulates error on first packet send\n");
+        printf(" /f - starts file transfer\n");
+        printf(" /m - back to main menu.\n");
+        printf(" or just type in any message to send it on server!\n");
+
+
         char *msg = (char*)calloc(MAX_FILE_SIZE, sizeof(char));
-        printf("Enter text:");
+        printf("\nEnter text:");
         gets();
         fgets(msg, MAX_TEXT_SIZE, stdin);
         
@@ -107,6 +117,9 @@ int client_start () {
         UCHAR msg_type;
 
         char filename[256];
+
+        if (msg[0] == '/' && msg[1] == 'm')
+            return 2;
 
         if (msg[0] != '/') {
             msg_size = strlen(msg) - 1;
@@ -144,7 +157,7 @@ int client_start () {
                 continue;
             }
 
-            printf("  File size: %dB\n", msg_size);
+            printf("  File size: %d B (%.2lf MB)\n", msg_size, (double)msg_size / 1000000);
 
             msg = (char*)realloc(msg, msg_size * sizeof(char*));
 
@@ -232,7 +245,7 @@ int client_start () {
                     printf("Error: sendto, error code: %d \n", WSAGetLastError());
                     return 1;
                 }           
-                printf("[+] Sent: [MSG_TYPE %s] [SEQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
+                printf("[+] Sent:     [MSG_TYPE %s] [SEQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
 
                 // Recieve ack
                 // TODO timeout
@@ -267,8 +280,10 @@ int client_start () {
         t = clock() - t;
         double time_taken = ((double)t) / CLOCKS_PER_SEC;
         double time_per_fragment = time_taken / num_of_fragments;
-        printf("[+] Sending took %lfs (%lfs per fragment)\n", time_taken, time_per_fragment);
+        printf("\n[+] Sending took %lfs (%lfs per fragment)\n\n", time_taken, time_per_fragment);
 
+        printf("Press any key to continue...");
+        getch();
         //free(data);
         header = NULL;
             
