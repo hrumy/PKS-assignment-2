@@ -101,9 +101,9 @@ int client_start () {
         printf("============================ Client =============================\n");
         printf("Target IP: %s\nTarget port: %d\n\n", ip, port);
         printf("Commands:\n");
-        printf(" /e [text] - simulates error on first packet send\n");
+        printf(" /e -flag [text] - simulates error on first packet send. flags: -c crc error, -t timeout error\n");
         printf(" /f - starts file transfer\n");
-        printf(" /m - back to main menu.\n");
+        printf(" /m - back to main menu\n");
         printf(" or just type in any message to send it on server!\n");
 
 
@@ -127,12 +127,33 @@ int client_start () {
             msg_type = 3;
         }
 
-        boolean error = false;
+        boolean crc_error = false, timeout_error = false;
         if (msg[0] == '/' && msg[1] == 'e') {
-            msg_size = strlen(msg) - 4;
+            msg_size = strlen(msg) - 7;
             msg = (char*)realloc(msg, msg_size * sizeof(char*));
-            error = true;
-            msg += 3;
+
+            if (msg[2] == ' ' && msg[3] == '-') {
+
+                if (msg[4] == 't')
+                    timeout_error = true;
+
+                else if (msg[4] == 'c')
+                    crc_error = true;
+
+                else {
+                    printf("  Wrong syntax!\n");
+                    printf("Press any key to continue...");
+                    getch();
+                    continue;
+                }
+            }
+            else {
+                printf("  Wrong syntax!\n");
+                printf("Press any key to continue...");
+                getch();
+                continue;
+            }
+            msg += 6;
             msg_type = 3;
         }
 
@@ -145,6 +166,8 @@ int client_start () {
             FILE* f = fopen(path, "rb");
             if (f == NULL) {
                 printf("[-] Error: file not found!\n");
+                printf("Press any key to continue...");
+                getch();
                 return 1;
             }
 
@@ -154,6 +177,8 @@ int client_start () {
 
             if (msg_size >= MAX_FILE_SIZE) {
                 printf("[-] Error: file is too big.\n");
+                printf("Press any key to continue...");
+                getch();
                 continue;
             }
 
@@ -221,6 +246,7 @@ int client_start () {
                 }
 
                 data[sizeof(struct packet_header) + i] = msg[index++];
+
             }
             
            // if (stop)
@@ -232,9 +258,9 @@ int client_start () {
                 header->message_type = msg_type;
                 header->crc = 0;
 
-                if (error) {
+                if (crc_error) {
                     header->crc = get_crc(data, sizeof(struct packet_header) + header->fragment_size) + 1;
-                    error = false;
+                    crc_error = false;
                 }
                 else
                     header->crc = get_crc(data, sizeof(struct packet_header) + header->fragment_size);
@@ -244,22 +270,47 @@ int client_start () {
                 if (rc == SOCKET_ERROR) {
                     printf("Error: sendto, error code: %d \n", WSAGetLastError());
                     return 1;
-                }           
-                printf("[+] Sent:     [MSG_TYPE %s] [SEQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
+                }
+                if (header->message_type != 4)
+                    printf("[+] Sent:     [MSG_TYPE %s] [SEQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
 
                 // Recieve ack
-                // TODO timeout
-                rc = recvfrom(s, data, sizeof(struct packet_header) + header->fragment_size, 0, (SOCKADDR*)&remote_addr, &remote_addr_len);
-                if (rc == SOCKET_ERROR)
-                {
-                    printf("Error: recvfrom, error code: %d \n", WSAGetLastError());
-                    return 1;
+                fd_set select_fds;                
+                struct timeval timeout;           
+
+                FD_ZERO(&select_fds);             
+                FD_SET(s, &select_fds);           
+
+                if (timeout_error) {
+                    timeout.tv_sec = 0;		
+                    timeout.tv_usec = 0;
+                    timeout_error = false;
+                }
+                else {
+                    timeout.tv_sec = 5;
+                    timeout.tv_usec = 0;
                 }
 
-                // Retrieve data from server
-                header = (struct packet_header*)data;
-                printf("[+] Recieved: [MSG_TYPE %s] [ARQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
-
+                if (select(32, &select_fds, NULL, NULL, &timeout) == 0)
+                {
+                    printf("[-] Error: timed out\n");
+                    //header->message_type == 0;
+                    fragment--;
+                }
+                else
+                {
+                    rc = recvfrom(s, data, sizeof(struct packet_header) + header->fragment_size, 0, (SOCKADDR*)&remote_addr, &remote_addr_len);
+                    if (rc == SOCKET_ERROR)
+                    {
+                        printf("Error: recvfrom, error code: %d \n", WSAGetLastError());
+                        return 1;
+                    }
+                    // Retrieve data from server
+                    header = (struct packet_header*)data;
+                    if (header->message_type != 4)
+                        printf("[+] Recieved: [MSG_TYPE %s] [ARQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
+                }
+                
             } while (header->message_type == 0);
 
         }

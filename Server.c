@@ -126,6 +126,7 @@ int server_start () {
         // Start recieving
         clock_t t;
         t = clock();
+        
         char* msg = (char*)calloc(msg_size, sizeof(char));
         int index = 0, error = 0;
         for (int fragment = 0; fragment < num_of_fragments; fragment++) {
@@ -141,19 +142,29 @@ int server_start () {
             data = (char*)realloc(data, (sizeof(struct packet_header) + header->fragment_size) * sizeof(char));
             header = (struct packet_header*)data;
 
-            printf("[+] Recieved: [MSG_TYPE %s] [SEQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
-
+            if (header->message_type != 4)
+                printf("[+] Recieved: [MSG_TYPE %s] [SEQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
+           
             int crc = header->crc;
             header->crc = 0;
+            boolean send = true;
 
-            // Checking for error
-            if (crc != get_crc(data, (sizeof(struct packet_header) + header->fragment_size))) {
+            // Checking for error 
+            if (header->seq_num != fragment) {               
+                fragment--;
+                send = false;
+
+            }
+
+            // Checking for error in crc
+            else if (crc != get_crc(data, (sizeof(struct packet_header) + header->fragment_size))) {
 
                 printf("[-] Error: bad packet.\n");
 
                 // Send again
                 header->message_type = 0;
                 fragment--;
+               
 
                 // If packet was resend 5 times, connection will end
                 if (error++ == 5) {
@@ -163,7 +174,9 @@ int server_start () {
             }
             else {
                 header->seq_num = fragment;
+                //header->seq_num = header->seq_num;
             }
+            
 
             if (header->message_type != 0) {
                 for (int i = 0; i < header->fragment_size; i++) {
@@ -172,19 +185,25 @@ int server_start () {
                 }
             }
 
-            // Delete data after sizeof(header)
-            char* buf = (char*)malloc(sizeof(struct packet_header) * sizeof(char));
-            for (int i = 0; i < sizeof(struct packet_header); i++)
-                buf[i] = data[i];
+            if (send) {
 
-            strcpy(data, buf);
+                // Delete data after sizeof(header)
+                char* buf = (char*)malloc(sizeof(struct packet_header) * sizeof(char));
+                for (int i = 0; i < sizeof(struct packet_header); i++)
+                    buf[i] = data[i];
 
-            rc = sendto(s, data, (sizeof(struct packet_header) /*+ header->fragment_size*/), 0, (SOCKADDR*)&remote_addr, remote_addr_len);
-            if (rc == SOCKET_ERROR) {
-                printf("Error: sendto, error code: %d \n", WSAGetLastError());
-                return 1;
+                strcpy(data, buf);
+
+
+                rc = sendto(s, data, (sizeof(struct packet_header)), 0, (SOCKADDR*)&remote_addr, remote_addr_len);
+                if (rc == SOCKET_ERROR) {
+                    printf("Error: sendto, error code: %d \n", WSAGetLastError());
+                    return 1;
+                }
+                if (header->message_type != 4)
+                    printf("[+] Sent:     [MSG_TYPE %s] [ARQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
             }
-            printf("[+] Sent:     [MSG_TYPE %s] [ARQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
+
 
             
             
@@ -219,7 +238,7 @@ int server_start () {
 
             // Saving file
             FILE* f = fopen(full_path, "wb");
-            //fwrite(msg, msg_size, 1, f);
+
             for (int i = 0; i < msg_size; i++)
                 fprintf(f, "%c", msg[i]);
 

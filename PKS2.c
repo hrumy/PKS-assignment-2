@@ -20,7 +20,7 @@ int main()
 
         if (option == 1)
             if (client_start() == 1) {
-                printf("[-] Disconnected\nPress any key to continue...");
+                printf("\n[-] Disconnected\nPress any key to continue...");
                 getch();
             }
 
@@ -28,7 +28,7 @@ int main()
 
         if (option == 2)
             if (server_start() == 1) {
-                printf("[-] Disconnected\nPress any key to continue...");
+                printf("\n[-] Disconnected\nPress any key to continue...");
                 getch();
             }
             
