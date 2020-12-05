@@ -6,9 +6,11 @@
 #include <time.h>
 #include <stdbool.h>
 
-#define MAX_FRAG_SIZE 1500
+#define MAX_FRAG_SIZE 1491
 #define POLY 0x8408
 #define MAX_TEXT_SIZE 2000
+#define MAX_FILE_SIZE 10000000
+#define PATH "C:\\skola\\III\\PKS\\PKS2\\downloads\\"
 
 #pragma pack(1) 
 struct packet_header {
