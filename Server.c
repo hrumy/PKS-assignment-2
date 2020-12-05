@@ -110,8 +110,6 @@ int server_start () {
         else
             num_of_fragments = 1;
 
-        boolean bOptVal = true;
-
         
     
         // Start recieving

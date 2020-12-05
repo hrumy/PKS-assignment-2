@@ -6,7 +6,7 @@
 #include <time.h>
 #include <stdbool.h>
 
-#define MAX_FRAG_SIZE 1491
+#define MAX_FRAG_SIZE 1391
 #define POLY 0x8408
 #define MAX_TEXT_SIZE 2000
 #define MAX_FILE_SIZE 10000000

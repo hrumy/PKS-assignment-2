@@ -5,7 +5,7 @@
 #pragma warning(disable : 4996)
 #pragma comment(lib, "Ws2_32.lib")
 
-UINT16 client_initialize_connection(long rc, SOCKET s, SOCKADDR_IN addr, SOCKADDR_IN* remote_addr, int remote_addr_len, UINT16 msg_size) {
+UINT16 client_initialize_connection(long rc, SOCKET s, SOCKADDR_IN addr, SOCKADDR_IN* remote_addr, int remote_addr_len, UINT32 msg_size) {
 
     struct packet_header *header;
     char init[sizeof(struct packet_header)];
@@ -110,12 +110,14 @@ int client_start () {
 
         if (msg[0] != '/') {
             msg_size = strlen(msg) - 1;
+            msg = (char*)realloc(msg, msg_size * sizeof(char*));
             msg_type = 3;
         }
 
         boolean error = false;
         if (msg[0] == '/' && msg[1] == 'e') {
             msg_size = strlen(msg) - 4;
+            msg = (char*)realloc(msg, msg_size * sizeof(char*));
             error = true;
             msg += 3;
             msg_type = 3;
@@ -192,20 +194,20 @@ int client_start () {
         t = clock();
         int index = 0;
         boolean stop = false;
-        for (int i = 0; i < num_of_fragments; i++) {
+        for (int fragment = 0; fragment < num_of_fragments; fragment++) {
 
-            header->seq_num = i;
+            header->seq_num = fragment;
            
-            for (int j = 0; j < fragment_size; j++) {
+            for (int i = 0; i < fragment_size; i++) {
 
                 if (index == msg_size) {
-                    header->fragment_size = j;
-                    if (j == 0)
+                    header->fragment_size = i;
+                    if (i == 0)
                         stop = true;
                     break;
                 }
 
-                data[sizeof(struct packet_header) + j] = msg[index++];
+                data[sizeof(struct packet_header) + i] = msg[index++];
             }
             
            // if (stop)
