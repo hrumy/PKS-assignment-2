@@ -11,6 +11,7 @@
 #define MAX_TEXT_SIZE 2000
 #define MAX_FILE_SIZE 10000000
 #define PATH "C:\\skola\\III\\PKS\\PKS2\\downloads\\"
+#define MB 1048576
 
 #pragma pack(1) 
 struct packet_header {

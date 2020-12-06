@@ -68,9 +68,7 @@ UINT16 get_crc(char* data_pointer, UINT16 length) {
 
     do
     {
-        for (i = 0, data = (unsigned int)0xff & *data_pointer++;
-            i < 8;
-            i++, data >>= 1)
+        for (i = 0, data = (unsigned int)0xff & *data_pointer++; i < 8; i++, data >>= 1)
         {
             if ((crc & 0x0001) ^ (data & 0x0001))
                 crc = (crc >> 1) ^ POLY;
@@ -120,16 +118,12 @@ void send_keepalive(SOCKADDR_IN* remote_addr, SOCKET s) {
 
     HANDLE hThread = CreateThread(NULL, 0, send_keepalive_thread, Param, 0, &dwThreadId);
 
-    printf("The thread ID: %d.\n", dwThreadId);
-
     if (hThread == NULL)
         printf("[-] Error: CreateThread() failed, %d.\n", GetLastError());
-    else
-        printf("Thread %d created!\n", dwThreadId);
 
     WaitForSingleObject(hThread, INFINITE);
 
-    if (CloseHandle(hThread) != 0)
+    CloseHandle(hThread);
 
-        printf("Handle to thread closed successfully.\n");
+
 }

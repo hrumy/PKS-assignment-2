@@ -13,7 +13,7 @@ UINT16 server_initialize_connection(long rc, SOCKET s, SOCKADDR_IN *remote_addr,
   
     rc = recvfrom(s, init, sizeof(struct packet_header), 0, (SOCKADDR*)remote_addr, &remote_addr_len);
     if (rc == SOCKET_ERROR) {
-        printf("[-] Error: recvfrom, error code: %d \n", WSAGetLastError());
+        printf("[-] Error: Client disconnected, error code: %d \n", WSAGetLastError());
         return 0;
     }
     else {
@@ -38,7 +38,7 @@ UINT16 server_initialize_connection(long rc, SOCKET s, SOCKADDR_IN *remote_addr,
         return 0;
     }
     else {
-        printf("[+] Acknowledgment of initialization sent! [%dB]\n\n", rc);
+        printf("[+] Acknowledgment of initialization sent! [%s][%dB]\n\n", message_type_decode(header->message_type), rc);
     }
 
     //free(init);
@@ -125,13 +125,13 @@ int server_start () {
 
                 if (select(32, &select_fds, NULL, NULL, &timeout) == 0)
                 {
-                    printf("[-] Error: timed out\n");
-                    // send keepalive
-               
+                    printf("[+] Keep alive %d! Sent [KA][9B]\n", num_of_ka);
+                    
+                    // send keepalive             
                     send_keepalive(&remote_addr, s);
-                    num_of_ka++;
-                    if (num_of_ka == 5) {
-                        printf("Error: client not responding to KA, terminating.\n");
+
+                    if (num_of_ka++ == 6) {
+                        printf("[-] Error: client not responding to KA, terminating.\n");
                         return 1;
                     }
                 }
@@ -150,19 +150,11 @@ int server_start () {
 
         data = (char*)malloc((sizeof(struct packet_header) + fragment_size) * sizeof(char));      
         header = (struct packet_header*)data;
+        
         header->fragment_size = fragment_size;
 
-        
-
         // Fragmentation
-        unsigned int num_of_fragments = fragmentation(msg_size, fragment_size);
-        /*if (msg_size > fragment_size) {
-        num_of_fragments = fragmentation(msg_size, fragment_size);
-        }
-        else
-            num_of_fragments = 1;*/
-
-        
+        unsigned int num_of_fragments = fragmentation(msg_size, fragment_size);    
     
         // Start recieving
         clock_t t;
@@ -200,7 +192,7 @@ int server_start () {
             // Checking for error in crc
             else if (crc != get_crc(data, (sizeof(struct packet_header) + header->fragment_size))) {
 
-                printf("[-] Error: bad packet.\n");
+                printf("[-] Error: bad packet %d.\n", fragment);
 
                 // Send again
                 header->message_type = 0;
@@ -215,7 +207,9 @@ int server_start () {
             }
             else {
                 header->seq_num = fragment;
-                //header->seq_num = header->seq_num;
+
+                if (header->message_type != 4)
+                    printf("[+] Valid packet %d.\n", fragment);
             }
             
 
@@ -284,8 +278,7 @@ int server_start () {
                 fprintf(f, "%c", msg[i]);
 
             fclose(f);
-            printf("\n[+] Recieved file: %s\n\n", full_path);
-            //free(full_path);
+            printf("\n[+] Recieved file: %s [%d B | %.2lf MB]\n\n", full_path, msg_size, (double) msg_size / MB);
         }
         
         t = clock() - t;

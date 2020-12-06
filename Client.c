@@ -26,6 +26,11 @@ UINT16 client_initialize_connection (long rc, SOCKET s, SOCKADDR_IN addr, SOCKAD
             printf("[-] Please select a valid fragment size.\n");
     }
 
+    putchar('\n');
+
+
+    // Keep alive method
+
     fd_set select_fds;
     struct timeval timeout;
     FD_ZERO(&select_fds);
@@ -70,7 +75,7 @@ UINT16 client_initialize_connection (long rc, SOCKET s, SOCKADDR_IN addr, SOCKAD
         return 0;
     }
     else {
-        printf("\n[+] Initialization packet sent! [%dB] \n", rc);
+        printf("\n[+] Initialization packet sent! [%s][%dB] \n",message_type_decode(header->message_type), rc);
     }
 
     rc = recvfrom(s, init, sizeof(struct packet_header), 0, (SOCKADDR*)remote_addr, &remote_addr_len);
@@ -221,14 +226,13 @@ int client_start () {
                 continue;
             }
 
-            printf("  File size: %d B (%.2lf MB)\n", msg_size, (double)msg_size / 1000000);
+            printf("  File size: %d B (%.2lf MB)\n", msg_size, (double)msg_size / MB);
 
             msg = (char*)realloc(msg, msg_size * sizeof(char*));
 
             // Back to the beggining of file
             rewind(f);
 
-            //fread(msg, msg_size, 1, f);
             for (int i = 0; i < msg_size; i++)
                 fscanf(f, "%c", &msg[i]);
 
@@ -253,13 +257,6 @@ int client_start () {
 
         // Fragmentation
         unsigned int num_of_fragments = fragmentation(msg_size, fragment_size);
-       /* if (msg_size > fragment_size) {
-            num_of_fragments = msg_size / fragment_size + 1;
-        }
-        else
-            num_of_fragments = 1;
-        */
-
 
         // Set header
         data = (char*)malloc((sizeof(struct packet_header) + fragment_size) * sizeof(char));           
@@ -267,13 +264,12 @@ int client_start () {
         header->message_type = msg_type;
         header->fragment_size = fragment_size;
 
-       
-        
+
         // Start sending
         clock_t t;
         t = clock();
         int index = 0;
-        //boolean stop = false;
+
         for (int fragment = 0; fragment < num_of_fragments; fragment++) {
 
             header->seq_num = fragment;
@@ -283,16 +279,12 @@ int client_start () {
                 if (index == msg_size) {
                     header->fragment_size = i;
                     if (i == 0)
-                        //stop = true;
                     break;
                 }
 
                 data[sizeof(struct packet_header) + i] = msg[index++];
 
             }
-            
-           // if (stop)
-           //     break;
 
             do {
 
