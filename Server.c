@@ -1,15 +1,16 @@
-
 #include "Util.h"
 #include "Server.h"
 
 #pragma warning(disable : 4996)
 #pragma comment(lib, "Ws2_32.lib")
 
+
+
 UINT16 server_initialize_connection(long rc, SOCKET s, SOCKADDR_IN *remote_addr, int remote_addr_len, UINT32* msg_type) {
 
     struct packet_header* header;
     char init[sizeof(struct packet_header)];
-
+  
     rc = recvfrom(s, init, sizeof(struct packet_header), 0, (SOCKADDR*)remote_addr, &remote_addr_len);
     if (rc == SOCKET_ERROR) {
         printf("[-] Error: recvfrom, error code: %d \n", WSAGetLastError());
@@ -18,6 +19,7 @@ UINT16 server_initialize_connection(long rc, SOCKET s, SOCKADDR_IN *remote_addr,
     else {
         header = (struct packet_header*)init;
         printf("[+] Initialization message received! Recieved [%s][%dB]\n", message_type_decode(header->message_type), rc);
+
     }
 
     UINT16 crc = header->crc;
@@ -82,7 +84,7 @@ int server_start () {
     
 
     char *data;
-
+    boolean first = true;
     while (1) {
 
         system("cls");
@@ -92,15 +94,54 @@ int server_start () {
         printf("Commands:\n 1 - start sniffing\n 2 - back to menu\n\nEnter your option: ");
         scanf("%d", &option);
 
-        if (option == 2)
+        if (option == 2) {
+            closesocket(s);
+            WSACleanup();
             return 2;
+        }
 
         system("cls");
         printf("======================= Server on port %d =======================\n Sniffing..\n", port);
 
+       
+
+        
+        // Keepalive handler
+        // make a function keeplive()
+        
+        int num_of_ka = 1;
+
+        if (!first){
+        
+            while (1) {
+
+                fd_set select_fds;
+                struct timeval timeout;
+                FD_ZERO(&select_fds);
+                FD_SET(s, &select_fds);
+
+                timeout.tv_sec = 20;
+                timeout.tv_usec = 0;
+
+                if (select(32, &select_fds, NULL, NULL, &timeout) == 0)
+                {
+                    printf("[-] Error: timed out\n");
+                    // send keepalive
+               
+                    send_keepalive(&remote_addr, s);
+                    num_of_ka++;
+                    if (num_of_ka == 5) {
+                        printf("Error: client not responding to KA, terminating.\n");
+                        return 1;
+                    }
+                }
+                else
+                    break;
+            }
+        }
+
         // Initializing connection and retrieving max fragment size
         struct packet_header* header;
-
         UINT32 msg_size = 0;
         UINT16 fragment_size = server_initialize_connection(rc, s, &remote_addr, remote_addr_len, &msg_size);
         if (fragment_size == 0)
@@ -114,12 +155,12 @@ int server_start () {
         
 
         // Fragmentation
-        unsigned int num_of_fragments;
-        if (msg_size > fragment_size) {
-            num_of_fragments = msg_size / fragment_size + 1;
+        unsigned int num_of_fragments = fragmentation(msg_size, fragment_size);
+        /*if (msg_size > fragment_size) {
+        num_of_fragments = fragmentation(msg_size, fragment_size);
         }
         else
-            num_of_fragments = 1;
+            num_of_fragments = 1;*/
 
         
     
@@ -254,9 +295,11 @@ int server_start () {
 
         printf("Press any key to continue...");
         getch();
-        //free(data);
+        first = false;
+    
         header = NULL;
        
 
     }
 }
+

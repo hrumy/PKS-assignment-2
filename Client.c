@@ -5,7 +5,7 @@
 #pragma warning(disable : 4996)
 #pragma comment(lib, "Ws2_32.lib")
 
-UINT16 client_initialize_connection(long rc, SOCKET s, SOCKADDR_IN addr, SOCKADDR_IN* remote_addr, int remote_addr_len, UINT32 msg_size) {
+UINT16 client_initialize_connection (long rc, SOCKET s, SOCKADDR_IN addr, SOCKADDR_IN* remote_addr, int remote_addr_len, UINT32 msg_size) {
 
     struct packet_header *header;
     char init[sizeof(struct packet_header)];
@@ -25,6 +25,39 @@ UINT16 client_initialize_connection(long rc, SOCKET s, SOCKADDR_IN addr, SOCKADD
         else
             printf("[-] Please select a valid fragment size.\n");
     }
+
+    fd_set select_fds;
+    struct timeval timeout;
+    FD_ZERO(&select_fds);
+    FD_SET(s, &select_fds);
+
+    timeout.tv_sec = 2;
+    timeout.tv_usec = 0;
+
+    while (1) {
+
+        if (select(32, &select_fds, NULL, NULL, &timeout) == 0)                 
+            break;
+
+        else {
+
+            rc = recvfrom(s, init, sizeof(struct packet_header), 0, (SOCKADDR*)remote_addr, &remote_addr_len);
+            if (rc == SOCKET_ERROR) {
+                printf("\n[-] Error: first recvfrom, error code: %d \n", WSAGetLastError());
+                
+
+            }
+            else
+            {
+                printf("[+] Keep alive! Recieved [%s][%dB]\n", message_type_decode(header->message_type), rc);
+            }
+        
+        }
+    }
+        
+
+
+
     header->fragment_size = fragment_size;
     header->message_type = 1;
     header->seq_num = msg_size;
@@ -107,6 +140,9 @@ int client_start () {
         printf(" or just type in any message to send it on server!\n");
 
 
+        
+
+
         char *msg = (char*)calloc(MAX_FILE_SIZE, sizeof(char));
         printf("\nEnter text:");
         gets();
@@ -118,14 +154,17 @@ int client_start () {
 
         char filename[256];
 
-        if (msg[0] == '/' && msg[1] == 'm')
+        if (msg[0] == '/' && msg[1] == 'm') {
+            closesocket(s);
+            WSACleanup();
             return 2;
-
-        if (msg[0] != '/') {
-            msg_size = strlen(msg) - 1;
-            msg = (char*)realloc(msg, msg_size * sizeof(char*));
-            msg_type = 3;
         }
+
+
+        msg_size = strlen(msg) - 1;
+        msg = (char*)realloc(msg, msg_size * sizeof(char*));
+        msg_type = 3;
+
 
         boolean crc_error = false, timeout_error = false;
         if (msg[0] == '/' && msg[1] == 'e') {
@@ -202,6 +241,8 @@ int client_start () {
             msg_type = 4;
         }
 
+        
+
 
 
         // Initializing connection and setting fragment size
@@ -211,12 +252,13 @@ int client_start () {
         }
 
         // Fragmentation
-        unsigned int num_of_fragments;
-        if (msg_size > fragment_size) {
+        unsigned int num_of_fragments = fragmentation(msg_size, fragment_size);
+       /* if (msg_size > fragment_size) {
             num_of_fragments = msg_size / fragment_size + 1;
         }
         else
             num_of_fragments = 1;
+        */
 
 
         // Set header
@@ -231,7 +273,7 @@ int client_start () {
         clock_t t;
         t = clock();
         int index = 0;
-        boolean stop = false;
+        //boolean stop = false;
         for (int fragment = 0; fragment < num_of_fragments; fragment++) {
 
             header->seq_num = fragment;
@@ -241,7 +283,7 @@ int client_start () {
                 if (index == msg_size) {
                     header->fragment_size = i;
                     if (i == 0)
-                        stop = true;
+                        //stop = true;
                     break;
                 }
 
@@ -305,8 +347,9 @@ int client_start () {
                         printf("Error: recvfrom, error code: %d \n", WSAGetLastError());
                         return 1;
                     }
-                    // Retrieve data from server
+                    // Retrieve data from server                  
                     header = (struct packet_header*)data;
+
                     if (header->message_type != 4)
                         printf("[+] Recieved: [MSG_TYPE %s] [ARQ_NUM %d] [%dB]\n", message_type_decode(header->message_type), header->seq_num, rc);
                 }
@@ -335,22 +378,8 @@ int client_start () {
 
         printf("Press any key to continue...");
         getch();
-        //free(data);
-        header = NULL;
-            
-            /*
-            rc = recvfrom(s, buf, 256, 0, (SOCKADDR*)&remote_addr, &remote_addr_len);
-            if (rc == SOCKET_ERROR)
-            {
-                printf("Fehler: recvfrom, fehler code: %d\n", WSAGetLastError());
-                return 1;
-            }
-            else
-            {
-                printf("%d bytes recieved!\n", rc);
-                buf[rc] = '\0';
-                printf("Recieved data: %s\n", buf);
-            }*/
-        
+       
+        header = NULL; 
     }
 }
+

@@ -1,5 +1,5 @@
 #include "Util.h"
-
+#include "Server.h"
 
 #pragma warning(disable : 4996)
 #pragma comment(lib, "Ws2_32.lib")
@@ -33,6 +33,10 @@ SOCKET create_socket() {
     }
    
     return s;
+}
+
+unsigned int fragmentation(unsigned int msg_size, unsigned int fragment_size) {
+    return (msg_size + fragment_size - 1) / fragment_size;
 }
 
 char* message_type_decode(UCHAR num_value) {
@@ -81,3 +85,51 @@ UINT16 get_crc(char* data_pointer, UINT16 length) {
     return (crc);
 }
 
+DWORD WINAPI send_keepalive_thread(LPVOID lpParam) {
+
+    struct keepalive_header* param;
+    param = (struct keepalive_header*)lpParam;
+
+    char keep_alive[sizeof(struct packet_header)];
+
+    struct packet_header* header;
+    header = (struct packet_header*)keep_alive;
+    header->message_type = 5;
+    header->fragment_size = 0;
+    header->crc = 0;
+
+    if (sendto(param->s, keep_alive, sizeof(struct packet_header), 0, (SOCKADDR*)param->remote_addr, sizeof(SOCKADDR_IN)) == -1) {
+        printf("[-] Error: client disconnected, %d", WSAGetLastError());
+    }
+
+    header = NULL;
+    param = NULL;
+
+    return 0;
+
+}
+
+void send_keepalive(SOCKADDR_IN* remote_addr, SOCKET s) {
+
+    DWORD dwThreadId;
+
+    struct keepalive_header* Param;
+    Param = (struct keepalive_header*)malloc(sizeof(struct keepalive_header));
+    Param->remote_addr = remote_addr;
+    Param->s = s;
+
+    HANDLE hThread = CreateThread(NULL, 0, send_keepalive_thread, Param, 0, &dwThreadId);
+
+    printf("The thread ID: %d.\n", dwThreadId);
+
+    if (hThread == NULL)
+        printf("[-] Error: CreateThread() failed, %d.\n", GetLastError());
+    else
+        printf("Thread %d created!\n", dwThreadId);
+
+    WaitForSingleObject(hThread, INFINITE);
+
+    if (CloseHandle(hThread) != 0)
+
+        printf("Handle to thread closed successfully.\n");
+}

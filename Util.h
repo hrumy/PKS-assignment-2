@@ -20,9 +20,18 @@ struct packet_header {
 	UINT32 seq_num;
 };
 
+struct keepalive_header {
+	SOCKET s;
+	SOCKADDR_IN* remote_addr;
+};
+
+
 
 int start_winsock(void);
 int init_winsock();
 SOCKET create_socket();
 char* message_type_decode(UCHAR num_value);
 UINT16 get_crc(char* data_pointer, UINT16 length);
+DWORD WINAPI send_keepalive_thread(LPVOID lpParam);
+void send_keepalive(SOCKADDR_IN* remote_addr, SOCKET s);
+unsigned int fragmentation(unsigned int msg_size, unsigned int fragment);
