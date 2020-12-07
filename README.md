@@ -1,6 +1,6 @@
 # Custom UDP protocol (school assignment)
 
-UDP communicator between client/server. Client can send messages and files and server will display or save them.
+UDP communicator between client/server. Client can send messages and files, server will display or save them.
 Simulation of errors during communication is implemented as well as keep alive packets.  
 
 ## How to run
